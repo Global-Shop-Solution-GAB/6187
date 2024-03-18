@@ -1,0 +1,403 @@
+Program.Sub.ScreenSU.Start
+Gui.F_Cust..Create
+Gui.F_Cust..Caption("Customer Master Dashboard")
+Gui.F_Cust..Size(16455,8625)
+Gui.F_Cust..MinX(13650)
+Gui.F_Cust..MinY(8625)
+Gui.F_Cust..Position(0,0)
+Gui.F_Cust..BackColor(-2147483633)
+Gui.F_Cust..MousePointer(0)
+Gui.F_Cust..Event(UnLoad,Unload)
+Gui.F_Cust.cmdExp.Create(Button)
+Gui.F_Cust.cmdExp.Size(1395,660)
+Gui.F_Cust.cmdExp.Position(14700,7425)
+Gui.F_Cust.cmdExp.Anchor(10)
+Gui.F_Cust.cmdExp.Caption("Export to Excel")
+Gui.F_Cust.cmdExp.Event(Click,ExportGrid)
+Gui.F_Cust.gsgcCusts.Create(GsGridControl)
+Gui.F_Cust.gsgcCusts.Size(15975,7035)
+Gui.F_Cust.gsgcCusts.Position(195,225)
+Gui.F_Cust.gsgcCusts.Anchor(15)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Customer: Crystorama
+'Developer: FEQ (Sisco)
+'Date: 11/23/2020
+'This program grabs information from the CRM user fields to create a dashboard. 
+'First iteration of this project is only for display. Does not allow edit or any link. Will export to Excel 
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+
+'We may need to add a label for the hook
+F.Intrinsic.Control.If(V.Caller.Hook, =, 14350)
+	
+	V.Passed.000201.Set("Promo & Terms")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'We run through the populate and show the screen
+F.Intrinsic.Control.CallSub(GatherData)
+Gui.F_Cust..Show
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.Callsub(Serialize)
+F.intrinsic.Control.End
+Program.Sub.Unload.End
+
+Program.Sub.Serialize.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sSerialize.Declare(String, "")
+
+'At the end of the process. Save the current format of the grid
+Gui.F_Cust.gsgcCusts.Serialize("gridUF", V.Local.sSerialize)
+F.Global.Registry.AddValue(V.Caller.User, V.Caller.CompanyCode, "gridUF", 6187, 1000, False, "Serialize", False, 0, -999.0, 1/1/1980, 12:00:00 AM, V.Local.sSerialize)
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Serialize.End
+
+Program.Sub.Deserialize.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sSerialize.Declare(String, "")
+
+'Extract the format of the grid per user
+F.Global.Registry.ReadValue(v.Caller.User, v.Caller.CompanyCode, "gridUF", 6187, 1000, 6, "", v.Local.sSerialize)
+
+F.Intrinsic.Control.If(V.Local.sSerialize, <>, "")
+	Gui.F_Cust.gsgcCusts.Deserialize(V.Local.sSerialize)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Deserialize.End
+
+Program.Sub.GatherData.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sFilter.Declare(String, "")
+V.Local.sFFAMsg.Declare(String, "")
+V.Local.iLoop.Declare(Long, 0)
+
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+F.Data.DataTable.CreateFromSQL("dtCustomers", "conx", "Select Name_Customer, Customer from V_CuSTOMER_MASTER", True)
+
+'The terms code is in one table, and we have to extract teh terms code message from another
+F.Data.Dictionary.CreateFromSQL("dicARTerms", "conx", "Select RTRIM(LTRIM(TERMS_CODE)), TERMS_MESSAGE from V_AR_TERMS")
+F.Data.Dictionary.SetDefaultReturn("dicARTerms", "")
+
+'Terms translation from code to message
+F.Data.DataTable.CreateFromSQL("dtSalesInfo", "conx", "Select CUSTOMER, UCASE(RTRIM(LTRIM(PAYMENT_TERMS))) as PAYMENT_TERMS from V_CUSTOMER_SALES", True)
+F.Data.DataTable.AddColumn("dtSalesInfo", "TERMS_MESSAGE", "String")
+
+F.Data.DataTable.FillFromDictionary("dtSalesInfo", "dicARTerms", "PAYMENT_TERMS", "TERMS_MESSAGE")
+
+F.Data.Dictionary.CreateFromDataTable("dicTerms", "dtSalesInfo", "CUSTOMER", "TERMS_MESSAGE")
+F.Data.Dictionary.SetDefaultReturn("dicTerms", "")
+F.Data.DataTable.AddColumn("dtCustomers", "Terms", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicTerms", "Customer", "Terms")
+
+F.Data.Dictionary.Close("dicTerms")
+F.Data.DataTable.Close("dtSalesInfo")
+F.Data.Dictionary.Close("dicARTerms")
+
+''Order Discount (Customer decided to change how this gets loaded. We are moving it to the bottom)
+'F.Data.Dictionary.CreateFromSQL("dicCatCode", "conx", "Select Cust, Code from V_Cust_Price_Cat")
+'F.Data.Dictionary.SetDefaultReturn("dicCatCode", "")
+'F.Data.DataTable.AddColumn("dtCustomers", "OrderDisc", "String")
+'F.Data.DataTable.FillFromDictionary("dtCustomers", "dicCatCode", "Customer", "OrderDisc")
+'F.Data.Dictionary.Close("dicCatCode")
+
+'Make table fromCRM_UF_VALUE with no restrictions
+F.Data.DataTable.CreateFromSQL("dtCRMUF", "conx", "Select COMPID, CID, RTRIM(LTRIM(UF9)) as UF9, RTRIM(LTRIM(UF10)) as UF10, RTRIM(LTRIM(UF11)) as UF11, RTRIM(LTRIM(UF12)) as UF12, RTRIM(LTRIM(UF13)) as UF13 from CRM_UF_VALUE", True)
+
+'Created dictionary from V_CONTACT where PRI_CNTCT = '1'
+F.Data.Dictionary.CreateFromSQL("dictContact","conx","Select ALT_ID, '1' From V_CONTACT where PRI_CNTCT = '1'")
+F.Data.Dictionary.SetDefaultReturn("dictContact","-1")
+
+
+'Add column in dtCRMUF to fill using primary contact dictionary
+F.Data.DataTable.AddColumn("dtCRMUF","PRI_CONTACT","String")
+F.Data.DataTable.FillFromDictionary("dtCRMUF","dictContact","CID","PRI_CONTACT")
+
+'Use new field to filter out primary contact infomration throguh a dataview
+F.Data.DataView.Create("dtCRMUF","dvCRMUF",22,"PRI_CONTACT = '1'","")
+F.Data.DataView.ToDataTable("dtCRMUF","dvCRMUF","dtCRMUF2")
+F.Data.DataView.Close("dtCRMUF","dvCRMUF")
+F.Data.DataTable.Close("dtCRMUF")
+
+'create dictionaries from the dataview instead of datatable
+
+'F.Data.Dictionary.CreateFromSQL("dictContact","conx","Select , ALT_ID From V_CONTACT where PRI_CNTCT = '1'")
+'F.Data.Dictionary.SetDefaultReturn("dictContact","")
+'F.Data.DataTable.AddColumn("dtCustomers","ALT_ID","String")
+'where CID in (select ALT_ID from V_CONTACT where PRI_CNTCT = '1')
+
+'User field 9 filler = Coop
+
+F.Data.Dictionary.CreateFromDataTable("dicUF9", "dtCRMUF2", "COMPID", "UF9")
+F.Data.Dictionary.SetDefaultReturn("dicUF9", "")
+F.Data.DataTable.AddColumn("dtCustomers", "Coop", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicUF9", "Customer", "Coop")
+F.Data.Dictionary.Close("dicUF9")
+
+'User field 10 filler = Defective Allowance
+F.Data.Dictionary.CreateFromDataTable("dicUF10", "dtCRMUF2", "COMPID", "UF10")
+F.Data.Dictionary.SetDefaultReturn("dicUF10", "")
+F.Data.DataTable.AddColumn("dtCustomers", "DefAllowance", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicUF10", "Customer", "DefAllowance")
+F.Data.Dictionary.Close("dicUF10")
+
+'User field 11 filler = Annual Rebate
+F.Data.Dictionary.CreateFromDataTable("dicUF11", "dtCRMUF2", "COMPID", "UF11")
+F.Data.Dictionary.SetDefaultReturn("dicUF11", "")
+F.Data.DataTable.AddColumn("dtCustomers", "AnnualReb", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicUF11", "Customer", "AnnualReb")
+F.Data.Dictionary.Close("dicUF11")
+
+''User field 12 filler = FFA (Customer wanted to change where the FFA was coming from )
+'F.Data.Dictionary.CreateFromDataTable("dicUF12", "dtCRMUF2", "COMPID", "UF12")
+'F.Data.Dictionary.SetDefaultReturn("dicUF12", "")
+'F.Data.DataTable.AddColumn("dtCustomers", "FFA", "String")
+'F.Data.DataTable.FillFromDictionary("dtCustomers", "dicUF12", "Customer", "FFA")
+'F.Data.Dictionary.Close("dicUF12")
+
+'User field 13 filler = CFP
+F.Data.Dictionary.CreateFromDataTable("dicUF13", "dtCRMUF2", "COMPID", "UF13")
+F.Data.Dictionary.SetDefaultReturn("dicUF13", "")
+F.Data.DataTable.AddColumn("dtCustomers", "CFP", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicUF13", "Customer", "CFP")
+F.Data.Dictionary.Close("dicUF13")
+
+'Dictionary for the External_ID
+F.Data.Dictionary.CreateFromSQL("dicExtID", "conx", "Select Customer, External_ID from V_Cust_Form_Info")
+F.Data.Dictionary.SetDefaultReturn("dicExtID", "")
+F.Data.DataTable.AddColumn("dtCustomers", "ExtID", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicExtID", "Customer", "ExtID")
+F.Data.Dictionary.Close("dicExtID")
+
+F.Data.DataTable.Close("dtCRMUF2")
+
+'The Order Discount and the FFA are both going to be getting pulled from the V_CUSTOMER_SHIPTO table..
+F.Data.DataTable.CreateFromSQL("dtFFA", "conx", "Select CUSTOMER, DISCOUNT, RTRIM(LTRIM(CODE_SHIP_COLLECT)) as CODE from V_CUSTOMER_SHIPTO")
+F.Data.DataTable.AddColumn("dtFFA", "FFA_MSG", "String")
+
+F.Data.DataTable.CreateFromSQL("dtFFAMsg", "conx", "Select RTRIM(LTRIM(SHIP_FOB_CODE)) as CODE, SHIP_FOB from V_SHIP_FOB")
+
+'loop through the damn table and fill in information through views due to the casing..
+F.Intrinsic.Control.For(V.Local.iLoop, 0, V.DataTable.dtFFA.RowCount--, 1)
+	F.Intrinsic.Control.If(V.DataTable.dtFFA(V.Local.iLoop).CUSTOMER!FieldValTrim, =, "7950")
+'		Function.Intrinsic.Debug.InvokeDebugger
+'		Function.Intrinsic.Debug.Stop
+		
+	F.Intrinsic.Control.EndIf
+	
+	'Make a filter with the code..
+	F.Intrinsic.String.Build("[CODE] = '{0}'", V.DataTable.dtFFA(V.Local.iLoop).CODE!FieldVal, V.Local.sFilter)
+	F.Data.DataView.Create("dtFFAMsg", "dvManualFill", 22, V.Local.sFilter, "")
+	F.Intrinsic.Control.If(V.DataView.dtFFAMsg!dvManualFill.RowCount, >, 0)
+		
+		'Pain in the ass.. teh code field only allows one character, so customer had to resort to using upper and lower case values.. but dictionaries do not check for case sensitivity...
+		F.Intrinsic.Control.If(V.DataView.dtFFAMsg!dvManualFill.RowCount, =, 2)
+			
+			F.Intrinsic.Control.If(V.DataView.dtFFAMsg!dvManualFill(0).CODE!FieldVal, =, V.DataTable.dtFFA(V.Local.iLoop).CODE!FieldVal)
+			
+				V.Local.sFFAMsg.Set(V.DataView.dtFFAMsg!dvManualFill(0).SHIP_FOB!FieldVal)
+			
+			F.Intrinsic.Control.ElseIf(V.DataView.dtFFAMsg!dvManualFill(1).CODE!FieldVal, =, V.DataTable.dtFFA(V.Local.iLoop).CODE!FieldVal)
+			
+				V.Local.sFFAMsg.Set(V.DataView.dtFFAMsg!dvManualFill(1).SHIP_FOB!FieldVal)
+			
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Else
+			
+			V.Local.sFFAMsg.Set(V.DataView.dtFFAMsg!dvManualFill(0).SHIP_FOB!FieldVal)
+			
+		F.Intrinsic.Control.EndIf
+		
+		
+		F.Data.DataTable.SetValue("dtFFA", V.Local.iLoop, "FFA_MSG", V.Local.sFFAMsg)
+		
+	F.Intrinsic.Control.EndIf
+	
+	F.Data.DataView.Close("dtFFAMsg", "dvManualFill")
+	
+F.Intrinsic.Control.Next(V.Local.iLoop)
+
+'F.Data.Dictionary.SetDefaultReturn("dicFFAMsg", "")
+'F.Data.DataTable.FillFromDictionary("dtFFA", "dicFFAMsg", "CODE", "FFA_MSG")
+'F.Data.Dictionary.Close("dicFFAMsg")
+
+'Order Discount 
+F.Data.Dictionary.CreateFromDataTable("dicCatCode", "dtFFA", "CUSTOMER", "DISCOUNT")
+F.Data.Dictionary.SetDefaultReturn("dicCatCode", "")
+F.Data.DataTable.AddColumn("dtCustomers", "OrderDisc", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicCatCode", "Customer", "OrderDisc")
+F.Data.Dictionary.Close("dicCatCode")
+
+'FFA
+F.Data.Dictionary.CreateFromDataTable("dicFFA", "dtFFA", "CUSTOMER", "FFA_MSG")
+F.Data.Dictionary.SetDefaultReturn("dicFFA", "")
+F.Data.DataTable.AddColumn("dtCustomers", "FFA", "String")
+F.Data.DataTable.FillFromDictionary("dtCustomers", "dicFFA", "Customer", "FFA")
+F.Data.Dictionary.Close("dicFFA")
+
+F.Data.DataTable.Close("dtFFA")
+
+F.ODBC.Connection!conx.Close
+
+F.Intrinsic.Control.CallSub(GridProperties)
+F.Intrinsic.Control.CallSub(Deserialize)
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.GatherData.End
+
+Program.Sub.GridProperties.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+
+Gui.F_Cust.gsgcCusts.AddGridviewFromDatatable("gridUF", "dtCustomers")
+
+Gui.F_Cust.gsgcCusts.SetGridviewProperty("gridUF", "MultiSelect", True)
+Gui.F_Cust.gsgcCusts.SetGridViewProperty("gridUF","AllowSort", True)
+Gui.F_Cust.gsgcCusts.SetGridViewProperty("gridUF","AllowFilter", True)
+Gui.F_Cust.gsgcCusts.SetGridviewProperty("gridUF","OptionsViewColumnAutoWidth", False)
+Gui.F_Cust.gsgcCusts.SetGridviewProperty("gridUF","OptionsFindAlwaysVisible", True)
+Gui.F_Cust.gsgcCusts.SetGridviewProperty("gridUF","OptionsViewShowAutoFilterRow", True)
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "Caption", "Customer")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "Caption", "Customer ID")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "Caption", "Terms")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "Caption", "Order Discount")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "Caption", "Coop")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "Caption", "Defective Allowance")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "Caption", "Annual Rebate")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "Caption", "FFA/CFP")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "Caption", "Restock Fees")
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "Caption", "External ID")
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "HeaderFontBold", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "HeaderFontBold", True)
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "MinWidth", 150)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "MinWidth", 50)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "MinWidth", 50)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "MinWidth", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "MinWidth", 50)
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "Width", 200)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "Width", 75)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "Width", 100)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "Width", 75)
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "ReadOnly", True)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "ReadOnly", True)
+
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Name_Customer", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Customer", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Terms", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "OrderDisc", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "Coop", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "DefAllowance", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "AnnualReb", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "FFA", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "CFP", "AllowEdit", False)
+Gui.F_Cust.gsgcCusts.SetColumnProperty("gridUF", "ExtID", "AllowEdit", False)
+
+Gui.F_Cust.gsgcCusts.MainView("gridUF")
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.GridProperties.End
+
+Program.Sub.ExportGrid.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sFile.Declare(String, "")
+V.Local.sTemp.Declare(String, "")
+
+F.Intrinsic.UI.ShowSaveFileDialog("", "xlsx", "CustomerExport.xlsx", "Customer Master Export", V.Local.sFile)
+
+'If there is a return, we will export the data into the file selected.
+F.Intrinsic.Control.If(V.Local.sFile, =, "***CANCEL***")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.ElseIf(V.Local.sFile.Trim, =, "")
+	F.Intrinsic.String.Build("{0}\Customer Master Export.xlsx", V.Caller.FilesDir, V.Local.sFile)
+F.Intrinsic.Control.Else
+	F.Intrinsic.String.Split(V.Local.sFile, ".", V.Local.sTemp)
+	F.Intrinsic.Control.If(V.Local.sTemp(V.Local.sTemp.UBound).UCase, <>, "XLSX")
+		F.Intrinsic.String.Build("{0}.xlsx", V.Local.sFile, V.Local.sFile)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+Gui.F_Cust.gsgcCusts.Export(V.Local.sFile, "XLSX")
+
+F.Intrinsic.String.Build("Customer information from the grid has been exported to:{0}{0}{1}{0}", V.Ambient.NewLine, V.Local.sFile, V.Local.sTemp)
+F.Intrinsic.UI.Msgbox(V.Local.sTemp, "EXPORT SUCCESS")
+
+F.Intrinsic.Control.Catch
+
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.ExportGrid.End
